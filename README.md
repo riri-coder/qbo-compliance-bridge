@@ -37,4 +37,4 @@ This Python-based "Logic Bridge" acts as a **Compliance Firewall**. It runs ever
 Distributed under the MIT License. See `LICENSE` for more information.
 
 ---
-*Created by a Freelance Workflow Consultant specialized in High-Integrity Financial Automation.*
+*Created by a Naturally Sync workflow consulting services.*
