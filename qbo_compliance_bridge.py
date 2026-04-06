@@ -5,51 +5,57 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 def process_receipt_logic(receipt_data, home_province="ON"):
-    """
-    Your Core Logic (The math and rules)
-    """
     vendor = receipt_data.get("vendor", "Unknown")
-    total_amount = float(receipt_data.get("total_amount", 0))
-    currency = receipt_data.get("currency", "CAD").upper()
-    tax_amount = float(receipt_data.get("tax_amount", 0))
     province = receipt_data.get("province", home_province).upper()
-    description = receipt_data.get("description", "").strip()
+    currency = receipt_data.get("currency", "CAD").upper()
+    total_header = float(receipt_data.get("total", 0))
     
+    # Global Flags
     flags = []
-    itc_claimable_gst = 0
-
-    # --- RULE 4: CURRENCY CONVERSION ---
-    usd_rate = 1.38 
+    
+    # 1. Handle Currency Conversion for the whole batch
+    usd_rate = 1.38
+    conversion_factor = usd_rate if currency == "USD" else 1.0
     if currency == "USD":
-        total_amount = round(total_amount * usd_rate, 2)
-        tax_amount = round(tax_amount * usd_rate, 2)
-        flags.append(f"Currency: Converted from USD at rate {usd_rate}")
-        currency = "CAD"
+        flags.append(f"Currency: Converted from USD at {usd_rate}")
 
-    # --- RULE 1: CAPITAL ASSET REVIEW ---
-    if total_amount >= 500.00:
-        flags.append("FLAG: Capital Asset Review Required (> $500)")
+    processed_lines = []
+    
+    # 2. Process each line item individually
+    for item in receipt_data.get("line_items", []):
+        desc = item.get("description", "No Description")
+        # Apply conversion factor to the line amount
+        raw_amount = float(item.get("amount", 0)) * conversion_factor
+        
+        line_flags = []
+        
+        # RULE: $500 Threshold per line
+        if raw_amount >= 500:
+            line_flags.append("FLAG: Capital Asset (> $500)")
+            
+        # RULE: Amazon Audit-Guard
+        if "AMAZON" in vendor.upper() and len(desc) < 5:
+            line_flags.append("FLAG: Vague Amazon Description")
 
-    # --- RULE 2: THE PST SPLIT ---
-    non_hst_provinces = ["BC", "SK", "MB", "QC"]
-    if province != home_province and province in non_hst_provinces:
-        itc_claimable_gst = round((total_amount / 1.12) * 0.05, 2)
-        pst_portion = tax_amount - itc_claimable_gst
-        flags.append(f"PST Split Applied: ${pst_portion} added to Cost Basis")
-    else:
-        itc_claimable_gst = tax_amount 
+        processed_lines.append({
+            "description": desc,
+            "amount_cad": round(raw_amount, 2),
+            "account_name": item.get("account_name"),
+            "account_id": item.get("account_id"),
+            "line_flags": line_flags
+        })
 
-    # --- RULE 3: THE AMAZON FLAG ---
-    if "AMAZON" in vendor.upper() and (not description or len(description) < 5):
-        flags.append("FLAG: Missing Amazon Description (High Audit Risk)")
+    # 3. Summary Compliance Logic (PST Split check)
+    non_hst = ["BC", "SK", "MB", "QC"]
+    if province != home_province and province in non_hst:
+        flags.append(f"COMPLIANCE: {province} PST detected. Ensure PST portion is capitalized in QBO.")
 
     return {
         "vendor": vendor,
-        "final_cad_total": total_amount,
-        "recoverable_itc_gst": itc_claimable_gst,
-        "capitalized_cost": round(total_amount - itc_claimable_gst, 2),
-        "flags": flags,
-        "status": "Needs Review" if flags else "Clean"
+        "status": "Needs Review" if flags or any(l['line_flags'] for l in processed_lines) else "Clean",
+        "global_flags": flags,
+        "processed_lines": processed_lines,
+        "total_cad": round(total_header * conversion_factor, 2)
     }
 
 # --- THE WEB SERVER LAYER ---
