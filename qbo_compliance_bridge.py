@@ -60,7 +60,7 @@ def process_receipt_logic(receipt_data, home_province="ON"):
 
 # --- THE WEB SERVER LAYER ---
 
-@app.route('/', methods=['GET'])
+@app.route('/', methods=['POST'])
 def health_check():
     return "Bridge is Live!", 200
 
