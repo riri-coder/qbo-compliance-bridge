@@ -67,7 +67,7 @@ def process_receipt_logic(receipt_data, home_province="ON"):
 
     if calculated_gap > 0.01:
         # Check for tip-heavy industries
-        service_keywords = ["RESTAURANT", "BAR", "SALON", "TAXI", "UBER", "CAFE", "HEALTHY PLANET"]
+        service_keywords = ["RESTAURANT", "BAR", "SALON", "TAXI", "UBER", "CAFE"]
         if any(word in vendor.upper() for word in service_keywords):
             global_flags.append(f"Auto-Reconcile: ${calculated_gap} Tip detected.")
         else:
